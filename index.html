@@ -51,6 +51,12 @@
   .table-scroll { max-height: 420px; overflow-y:auto; }
   .searchbar { margin-bottom:12px; display:flex; gap:10px; }
   .searchbar input { border:1px solid var(--border); color: var(--navy); background:#fff; flex:1; }
+  .mini-range { display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin: 2px 0 10px 0; }
+  .mini-range label { font-size:11px; color:var(--slate); text-transform:uppercase; letter-spacing:0.3px; }
+  .mini-range span.sep { font-size:12px; color:var(--slate); }
+  .mini-range input[type=date] { padding:5px 8px; border-radius:6px; border:1px solid var(--border); background:#fff; color:var(--navy); font-size:12px; font-family: var(--font-body); }
+  .mini-range input[type=date]:focus { outline: 2px solid var(--highlight); }
+  .mini-reset { font-size:11px; color:var(--teal); background:none; border:none; text-decoration:underline; cursor:pointer; padding:0; font-family: var(--font-body); }
   footer { text-align:center; color:var(--slate); font-size:12px; padding:24px; }
   .note { font-size:11px; color:var(--slate); margin-top:10px; }
   @media (max-width: 1000px) {
@@ -102,18 +108,78 @@
   <div class="grid2">
     <div class="card">
       <h2>New Hires vs. Terminations</h2>
+      <div class="mini-range">
+        <label for="hireTermFrom">From</label><input type="date" id="hireTermFrom">
+        <span class="sep">–</span>
+        <label for="hireTermTo">To</label><input type="date" id="hireTermTo">
+        <button class="mini-reset" id="hireTermReset" type="button">Reset</button>
+      </div>
       <p class="desc" id="hireTermDesc">By month</p>
       <div class="chart-wrap"><canvas id="hireTermChart"></canvas></div>
     </div>
     <div class="card">
       <h2>Department Composition Over Time</h2>
+      <div class="mini-range">
+        <label for="stackFrom">From</label><input type="date" id="stackFrom">
+        <span class="sep">–</span>
+        <label for="stackTo">To</label><input type="date" id="stackTo">
+        <button class="mini-reset" id="stackReset" type="button">Reset</button>
+      </div>
       <p class="desc" id="stackDesc">Last 12 months, month-end headcount</p>
       <div class="chart-wrap"><canvas id="stackChart"></canvas></div>
     </div>
   </div>
 
+  <div class="grid2">
+    <div class="card">
+      <h2>Attrition Rate by Department</h2>
+      <p class="desc" id="attritionDesc">Terminations ÷ average headcount, trailing 12 months</p>
+      <div class="chart-wrap"><canvas id="attritionChart"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>Tenure</h2>
+      <p class="desc" id="tenureDesc">Current roster, time since hire</p>
+      <div class="chart-wrap"><canvas id="tenureChart"></canvas></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:16px;">
+    <h2>Headcount by Location</h2>
+    <p class="desc" id="locationDesc">Current roster, by state/region</p>
+    <div class="chart-wrap"><canvas id="locationChart"></canvas></div>
+  </div>
+
+  <div class="card" style="margin-bottom:16px;">
+    <h2>Department Growth — Selected Period</h2>
+    <div class="mini-range">
+      <label for="growthFrom">From</label><input type="date" id="growthFrom">
+      <span class="sep">–</span>
+      <label for="growthTo">To</label><input type="date" id="growthTo">
+      <button class="mini-reset" id="growthReset" type="button">Reset</button>
+    </div>
+    <p class="desc" id="growthDesc">Net change by department</p>
+    <div class="table-scroll" style="max-height:340px;">
+      <table id="growthTable">
+        <thead><tr><th style="cursor:default;">Department</th><th style="cursor:default;">Start</th><th style="cursor:default;">End</th><th style="cursor:default;">Net Change</th><th style="cursor:default;">% Change</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:16px;">
+    <h2>Cumulative Hires vs. Terminations</h2>
+    <p class="desc" id="cumulativeDesc">All-time gross flow, Jan 2024 – Jul 2026</p>
+    <div class="chart-wrap"><canvas id="cumulativeChart"></canvas></div>
+  </div>
+
   <div class="card" style="margin-bottom:16px;">
     <h2>Activity</h2>
+    <div class="mini-range">
+      <label for="activityFrom">From</label><input type="date" id="activityFrom">
+      <span class="sep">–</span>
+      <label for="activityTo">To</label><input type="date" id="activityTo">
+      <button class="mini-reset" id="activityReset" type="button">Reset</button>
+    </div>
     <p class="desc" id="eventsDesc">Hires and terminations, last 90 days (through Jul 13, 2026)</p>
     <div class="table-scroll">
       <table id="eventsTable">
@@ -201,6 +267,41 @@ function monthsInRange(range){
   });
 }
 
+// --- Independent per-card date filters (Activity, Department Growth, Hires vs Terminations,
+// Department Composition) each keep their own From/To, separate from the header's global range,
+// so you can pin one section to a period while comparing another. ---
+const TRAILING12_FROM = DATA.monthly[DATA.monthly.length-12].month_key + '-01';
+const NINETY_DAYS_FROM = (function(){
+  const d = new Date(FULL_MAX + 'T00:00:00'); d.setDate(d.getDate()-90); return d.toISOString().slice(0,10);
+})();
+
+function setupLocalRange(fromId, toId, resetId, defaultFrom, onChange){
+  const fromEl = document.getElementById(fromId);
+  const toEl = document.getElementById(toId);
+  const resetEl = document.getElementById(resetId);
+  [fromEl, toEl].forEach(el => { el.min = FULL_MIN; el.max = FULL_MAX; });
+  fromEl.value = defaultFrom;
+  toEl.value = FULL_MAX;
+  fromEl.addEventListener('change', onChange);
+  toEl.addEventListener('change', onChange);
+  resetEl.addEventListener('click', () => { fromEl.value = defaultFrom; toEl.value = FULL_MAX; onChange(); });
+  return {
+    fromEl, toEl, defaultFrom,
+    getRange(){
+      let from = fromEl.value || defaultFrom;
+      let to = toEl.value || FULL_MAX;
+      if (from > to) { [from, to] = [to, from]; }
+      return { from, to };
+    },
+    isDefault(){ return fromEl.value === defaultFrom && (toEl.value === FULL_MAX || !toEl.value); }
+  };
+}
+
+const hireTermRange = setupLocalRange('hireTermFrom','hireTermTo','hireTermReset', FULL_MIN, ()=>renderHireTerm());
+const stackRange = setupLocalRange('stackFrom','stackTo','stackReset', TRAILING12_FROM, ()=>renderStack());
+const growthRange = setupLocalRange('growthFrom','growthTo','growthReset', TRAILING12_FROM, ()=>renderGrowth());
+const activityRange = setupLocalRange('activityFrom','activityTo','activityReset', NINETY_DAYS_FROM, ()=>renderEvents());
+
 document.getElementById('asOf').textContent = `Data through July 13, 2026 · ${DATA.roster.length} active employees today · ${DATA.monthly.length} months of history (Jan 2024 – Jul 2026)`;
 
 function fmtDate(iso){
@@ -214,31 +315,31 @@ function fmtRangeLabel(range){
 }
 
 function computeKPIs(){
-  const m = DATA.monthly;
-  const last = m[m.length-1];
-  const current = currentDept==='ALL' ? last.month_end_headcount : last.dept_counts[currentDept];
-  const jan2024 = m[0];
-  const startVal = currentDept==='ALL' ? jan2024.month_end_headcount : jan2024.dept_counts[currentDept];
-  const dec2025 = m.find(x=>x.month_key==='2025-12');
-  const startOfYear = currentDept==='ALL' ? dec2025.month_end_headcount : dec2025.dept_counts[currentDept];
-  const ytd = m.filter(x=>x.month_key.startsWith('2026'));
-  let ytdHires, ytdTerms;
+  const range = getRange();
+  const usingDefault = isFullRange(range);
+  // Default view keeps the familiar framing: "2026 YTD" for hires/terms/net-change, trailing
+  // 12 months for attrition. A custom range uses exactly what the user picked for everything.
+  const months = usingDefault ? DATA.monthly.filter(x=>x.month_key.startsWith('2026')) : monthsInRange(range);
+  const attritionMonths = usingDefault ? DATA.monthly.slice(-12) : months;
+  const start = usingDefault ? DATA.monthly.find(x=>x.month_key==='2025-12') : months[0];
+  const end = months[months.length-1];
+  const current = currentDept==='ALL' ? end.month_end_headcount : end.dept_counts[currentDept];
+  const startOfPeriod = currentDept==='ALL' ? start.month_end_headcount : start.dept_counts[currentDept];
+  let periodHires, periodTerms;
   if(currentDept==='ALL'){
-    ytdHires = ytd.reduce((s,x)=>s+x.new_hires,0);
-    ytdTerms = ytd.reduce((s,x)=>s+x.terminations,0);
+    periodHires = months.reduce((s,x)=>s+x.new_hires,0);
+    periodTerms = months.reduce((s,x)=>s+x.terminations,0);
   } else {
-    ytdHires = DATA.events.filter(e=>e.type==='hire' && e.department===currentDept && e.date && e.date.startsWith('2026')).length;
-    ytdTerms = DATA.events.filter(e=>e.type==='termination' && e.department===currentDept && e.date && e.date.startsWith('2026')).length;
+    periodHires = DATA.events.filter(e=>e.type==='hire' && e.department===currentDept && months.some(mm=>mm.month===e.month)).length;
+    periodTerms = DATA.events.filter(e=>e.type==='termination' && e.department===currentDept && months.some(mm=>mm.month===e.month)).length;
   }
-  const netYTD = current - startOfYear;
-  // trailing 12mo attrition: terms in last 12 months / avg headcount over that window
-  const last12 = m.slice(-12);
-  const termsTrailing = currentDept==='ALL' ? last12.reduce((s,x)=>s+x.terminations,0)
-    : DATA.events.filter(e=>e.type==='termination' && e.department===currentDept && last12.some(mm=>mm.month_key===e.date?.slice(0,7))).length;
-  const avgHC = last12.reduce((s,x)=> s + (currentDept==='ALL'?x.month_end_headcount:x.dept_counts[currentDept]), 0) / last12.length;
+  const netChange = current - startOfPeriod;
+  const termsTrailing = currentDept==='ALL' ? attritionMonths.reduce((s,x)=>s+x.terminations,0)
+    : DATA.events.filter(e=>e.type==='termination' && e.department===currentDept && attritionMonths.some(mm=>mm.month===e.month)).length;
+  const avgHC = attritionMonths.reduce((s,x)=> s + (currentDept==='ALL'?x.month_end_headcount:x.dept_counts[currentDept]), 0) / attritionMonths.length;
   const attrition = avgHC>0 ? (termsTrailing/avgHC*100) : 0;
 
-  return {current, netYTD, ytdHires, ytdTerms, attrition, startOfYear};
+  return {current, netChange, periodHires, periodTerms, attrition, startOfPeriod, usingDefault, range, start, end};
 }
 
 function kpiCard(label, value, sub, subClass){
@@ -247,19 +348,21 @@ function kpiCard(label, value, sub, subClass){
 
 function renderKPIs(){
   const k = computeKPIs();
-  const netClass = k.netYTD > 0 ? 'pos' : (k.netYTD < 0 ? 'neg' : 'neutral');
-  const netSign = k.netYTD > 0 ? '+' : '';
+  const netClass = k.netChange > 0 ? 'pos' : (k.netChange < 0 ? 'neg' : 'neutral');
+  const netSign = k.netChange > 0 ? '+' : '';
+  const periodLabel = k.usingDefault ? 'Jan – Jul 2026' : fmtRangeLabel(k.range);
+  const asOfLabel = k.usingDefault ? 'as of Jul 13, 2026' : `as of ${fmtDate(k.end.month_key+'-01')}`;
   const html = [
-    kpiCard('Current Headcount', k.current, currentDept==='ALL' ? 'as of Jul 13, 2026' : DEPT_LABEL(currentDept)),
-    kpiCard('Net Change, 2026 YTD', `${netSign}${k.netYTD}`, `from ${k.startOfYear} at start of year`, netClass),
-    kpiCard('Hires, 2026 YTD', k.ytdHires, 'Jan – Jul 2026', 'pos'),
-    kpiCard('Terminations, 2026 YTD', k.ytdTerms, 'Jan – Jul 2026', k.ytdTerms>0?'neg':'neutral'),
-    kpiCard('Trailing 12-Mo Attrition', k.attrition.toFixed(1)+'%', 'terms ÷ avg headcount'),
+    kpiCard(k.usingDefault ? 'Current Headcount' : 'Headcount, End of Period', k.current, currentDept==='ALL' ? asOfLabel : DEPT_LABEL(currentDept)),
+    kpiCard(k.usingDefault ? 'Net Change, 2026 YTD' : 'Net Change, Selected Period', `${netSign}${k.netChange}`, `from ${k.startOfPeriod} at period start`, netClass),
+    kpiCard(k.usingDefault ? 'Hires, 2026 YTD' : 'Hires, Selected Period', k.periodHires, periodLabel, 'pos'),
+    kpiCard(k.usingDefault ? 'Terminations, 2026 YTD' : 'Terminations, Selected Period', k.periodTerms, periodLabel, k.periodTerms>0?'neg':'neutral'),
+    kpiCard(k.usingDefault ? 'Trailing 12-Mo Attrition' : 'Attrition, Selected Period', k.attrition.toFixed(1)+'%', 'terms ÷ avg headcount'),
   ].join('');
   document.getElementById('kpiRow').innerHTML = html;
 }
 
-let trendChart, mixChart, hireTermChart, stackChart;
+let trendChart, mixChart, hireTermChart, stackChart, attritionChart, tenureChart, locationChart, cumulativeChart;
 
 function renderTrend(){
   const range = getRange();
@@ -292,7 +395,9 @@ function renderTrend(){
 }
 
 function renderMix(){
-  const last = DATA.monthly[DATA.monthly.length-1];
+  const range = getRange();
+  const months = monthsInRange(range);
+  const last = months[months.length-1];
   const entries = Object.entries(last.dept_counts).filter(([k,v])=>v>0);
   const ctx = document.getElementById('mixChart');
   if(mixChart) mixChart.destroy();
@@ -310,10 +415,13 @@ function renderMix(){
       }
     }
   });
+  document.getElementById('mixDesc').textContent = isFullRange(range)
+    ? 'As of Jul 13, 2026'
+    : `As of ${last.month} (end of selected period)`;
 }
 
 function renderHireTerm(){
-  const range = getRange();
+  const range = hireTermRange.getRange();
   const months = monthsInRange(range);
   const labels = months.map(m=>m.month);
   let hires, terms;
@@ -338,13 +446,13 @@ function renderHireTerm(){
       plugins:{ legend:{ position:'bottom' } }
     }
   });
-  document.getElementById('hireTermDesc').textContent = isFullRange(range) ? 'By month' : `By month, ${fmtRangeLabel(range)}`;
+  document.getElementById('hireTermDesc').textContent = hireTermRange.isDefault() ? 'By month, full history' : `By month, ${fmtRangeLabel(range)}`;
 }
 
 function renderStack(){
-  const range = getRange();
-  const usingDefault = isFullRange(range);
-  const months = usingDefault ? DATA.monthly.slice(-12) : monthsInRange(range);
+  const range = stackRange.getRange();
+  const usingDefault = stackRange.isDefault();
+  const months = monthsInRange(range);
   const labels = months.map(m=>m.month);
   const depts = currentDept==='ALL' ? DATA.depts.filter(d => months.some(m=>m.dept_counts[d]>0)) : [currentDept];
   const datasets = depts.map(d => ({
@@ -369,15 +477,168 @@ function renderStack(){
     : `${fmtRangeLabel(range)}, month-end headcount`;
 }
 
-function renderEvents(){
+function windowMonths(){
+  // months used for "rate over a window" style views: respects date search, else trailing 12
   const range = getRange();
   const usingDefault = isFullRange(range);
-  let windowFrom = range.from, windowTo = range.to;
-  if (usingDefault){
-    const cutoff = new Date('2026-07-13'); cutoff.setDate(cutoff.getDate()-90);
-    windowFrom = cutoff.toISOString().slice(0,10);
-    windowTo = FULL_MAX;
-  }
+  return { months: usingDefault ? DATA.monthly.slice(-12) : monthsInRange(range), usingDefault, range };
+}
+
+function renderAttrition(){
+  const { months, usingDefault, range } = windowMonths();
+  const depts = currentDept==='ALL'
+    ? DATA.depts.filter(d => months.some(m=>m.dept_counts[d]>0))
+    : [currentDept];
+  const rows = depts.map(d => {
+    const terms = DATA.events.filter(e=>e.type==='termination' && e.department===d && months.some(m=>m.month===e.month)).length;
+    const avgHC = months.reduce((s,m)=>s+m.dept_counts[d],0)/months.length;
+    const rate = avgHC>0 ? (terms/avgHC*100) : 0;
+    return { dept: d, rate, terms };
+  }).filter(r=> currentDept!=='ALL' || r.terms>0 || r.rate>0).sort((a,b)=>b.rate-a.rate).slice(0,12);
+  const ctx = document.getElementById('attritionChart');
+  if(attritionChart) attritionChart.destroy();
+  attritionChart = new Chart(ctx, {
+    type:'bar',
+    data:{ labels: rows.map(r=>DEPT_LABEL(r.dept)), datasets:[{ label:'Attrition Rate', data: rows.map(r=>r.rate.toFixed(1)), backgroundColor: rows.map(r=>r.rate>=40?'#c1443a':(r.rate>=20?'#c98a1f':BRAND)) }] },
+    options:{
+      indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      scales:{ x:{ beginAtZero:true, ticks:{ callback:v=>v+'%' } } },
+      plugins:{ legend:{ display:false }, tooltip:{ callbacks:{ label: c => `${c.raw}% attrition (${rows[c.dataIndex].terms} terms)` } } }
+    }
+  });
+  document.getElementById('attritionDesc').textContent = usingDefault
+    ? 'Terminations ÷ average headcount, trailing 12 months'
+    : `Terminations ÷ average headcount, ${fmtRangeLabel(range)}`;
+}
+
+function rosterAsOf(range){
+  // Current-roster views can only reflect today's active employees (we don't have a historical
+  // roster snapshot for people who have since left). As a date-range proxy, we include employees
+  // who had already joined by the selected end date, and compute tenure relative to that date.
+  const asOf = new Date(range.to + 'T00:00:00');
+  return DATA.roster
+    .filter(r => new Date(r.start_date + 'T00:00:00') <= asOf)
+    .filter(r => currentDept==='ALL' || r.department===currentDept)
+    .map(r => ({ ...r, tenureAsOf: (asOf - new Date(r.start_date + 'T00:00:00')) / (365.25*24*3600*1000) }));
+}
+
+function renderTenure(){
+  const range = getRange();
+  const usingDefault = isFullRange(range);
+  const rows = rosterAsOf(range);
+  const buckets = [
+    { label:'<1 yr', test: t => t < 1 },
+    { label:'1–2 yrs', test: t => t >= 1 && t < 2 },
+    { label:'2–3 yrs', test: t => t >= 2 && t < 3 },
+    { label:'3–5 yrs', test: t => t >= 3 && t < 5 },
+    { label:'5+ yrs', test: t => t >= 5 },
+  ];
+  const counts = buckets.map(b => rows.filter(r=>b.test(r.tenureAsOf)).length);
+  const avgTenure = rows.length ? (rows.reduce((s,r)=>s+r.tenureAsOf,0)/rows.length).toFixed(1) : '0.0';
+  const ctx = document.getElementById('tenureChart');
+  if(tenureChart) tenureChart.destroy();
+  tenureChart = new Chart(ctx, {
+    type:'bar',
+    data:{ labels: buckets.map(b=>b.label), datasets:[{ label:'Employees', data: counts, backgroundColor: HIGHLIGHT, borderColor: BRAND, borderWidth:1 }] },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      scales:{ y:{ beginAtZero:true, ticks:{precision:0} } },
+      plugins:{ legend:{ display:false } }
+    }
+  });
+  const prefix = usingDefault ? "Current roster" : `Today's roster, hired by ${fmtDate(range.to)}`;
+  document.getElementById('tenureDesc').textContent = `${prefix}${currentDept==='ALL'?'':' · '+DEPT_LABEL(currentDept)} · average tenure ${avgTenure} yrs (n=${rows.length})`;
+}
+
+function renderLocation(){
+  const range = getRange();
+  const usingDefault = isFullRange(range);
+  const rows = rosterAsOf(range);
+  const counts = {};
+  rows.forEach(r => { const loc = r.location || 'Unspecified'; counts[loc] = (counts[loc]||0)+1; });
+  const entries = Object.entries(counts).sort((a,b)=>b[1]-a[1]);
+  const ctx = document.getElementById('locationChart');
+  if(locationChart) locationChart.destroy();
+  locationChart = new Chart(ctx, {
+    type:'bar',
+    data:{ labels: entries.map(([k])=>k), datasets:[{ label:'Employees', data: entries.map(([,v])=>v), backgroundColor: BRAND }] },
+    options:{
+      indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      scales:{ x:{ beginAtZero:true, ticks:{precision:0} } },
+      plugins:{ legend:{ display:false } }
+    }
+  });
+  document.getElementById('locationDesc').textContent = usingDefault
+    ? `Current roster, by state/region${currentDept==='ALL'?'':' · '+DEPT_LABEL(currentDept)}`
+    : `Today's roster hired by ${fmtDate(range.to)}, by state/region${currentDept==='ALL'?'':' · '+DEPT_LABEL(currentDept)}`;
+}
+
+function renderGrowth(){
+  const range = growthRange.getRange();
+  const usingDefault = growthRange.isDefault();
+  const months = monthsInRange(range);
+  if(months.length < 1) return;
+  const start = months[0], end = months[months.length-1];
+  const depts = currentDept==='ALL'
+    ? DATA.depts.filter(d => start.dept_counts[d]>0 || end.dept_counts[d]>0)
+    : [currentDept];
+  const rows = depts.map(d => {
+    const s = start.dept_counts[d], e = end.dept_counts[d];
+    const change = e - s;
+    const pct = s>0 ? (change/s*100) : (e>0 ? 100 : 0);
+    return { dept: DEPT_LABEL(d), start: s, end: e, change, pct };
+  }).sort((a,b)=> b.change - a.change);
+  const tbody = document.querySelector('#growthTable tbody');
+  tbody.innerHTML = rows.map(r=>{
+    const cls = r.change>0?'pos':(r.change<0?'neg':'neutral');
+    const sign = r.change>0?'+':'';
+    return `<tr><td>${r.dept}</td><td>${r.start}</td><td>${r.end}</td><td class="sub ${cls}">${sign}${r.change}</td><td class="sub ${cls}">${sign}${r.pct.toFixed(0)}%</td></tr>`;
+  }).join('');
+  document.getElementById('growthDesc').textContent = usingDefault
+    ? `Net change by department, ${start.month} – ${end.month}`
+    : `Net change by department, ${fmtRangeLabel(range)}`;
+}
+
+function renderCumulative(){
+  const range = getRange();
+  const usingDefault = isFullRange(range);
+  const months = monthsInRange(range);
+  const labels = months.map(m=>m.month);
+  let cumHires = 0, cumTerms = 0;
+  const hiresSeries = [], termsSeries = [];
+  months.forEach(m => {
+    if(currentDept==='ALL'){
+      cumHires += m.new_hires; cumTerms += m.terminations;
+    } else {
+      cumHires += DATA.events.filter(e=>e.type==='hire' && e.department===currentDept && e.month===m.month).length;
+      cumTerms += DATA.events.filter(e=>e.type==='termination' && e.department===currentDept && e.month===m.month).length;
+    }
+    hiresSeries.push(cumHires); termsSeries.push(cumTerms);
+  });
+  const ctx = document.getElementById('cumulativeChart');
+  if(cumulativeChart) cumulativeChart.destroy();
+  cumulativeChart = new Chart(ctx, {
+    type:'line',
+    data:{ labels, datasets:[
+      { label:'Cumulative Hires', data:hiresSeries, borderColor:BRAND, backgroundColor:'rgba(36,20,81,0.08)', fill:true, tension:0.2, pointRadius:0, borderWidth:2.5 },
+      { label:'Cumulative Terminations', data:termsSeries, borderColor:'#c1443a', backgroundColor:'rgba(193,68,58,0.08)', fill:true, tension:0.2, pointRadius:0, borderWidth:2.5 }
+    ]},
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      scales:{ y:{ beginAtZero:true, ticks:{precision:0} }, x:{ ticks:{ maxRotation:60, minRotation:60, autoSkip:true, maxTicksLimit:16 } } },
+      plugins:{ legend:{ position:'bottom' } }
+    }
+  });
+  const scope = currentDept==='ALL' ? '' : ` · ${DEPT_LABEL(currentDept)}`;
+  document.getElementById('cumulativeDesc').textContent = usingDefault
+    ? `All-time gross flow, Jan 2024 – Jul 2026${scope}`
+    : `Gross flow within selected period, ${fmtRangeLabel(range)}${scope}`;
+}
+
+function renderEvents(){
+  const range = activityRange.getRange();
+  const usingDefault = activityRange.isDefault();
+  const windowFrom = range.from, windowTo = range.to;
   const rows = DATA.events.filter(e=>{
     if(!e.date) return false;
     if(currentDept!=='ALL' && e.department!==currentDept) return false;
@@ -398,20 +659,24 @@ function renderEvents(){
 
 let rosterSort = {key:'department', dir:1};
 function renderRoster(){
-  let rows = DATA.roster.filter(r => currentDept==='ALL' || r.department===currentDept);
+  const range = getRange();
+  const usingDefault = isFullRange(range);
+  let rows = rosterAsOf(range);
   const q = document.getElementById('rosterSearch').value.trim().toLowerCase();
   if(q) rows = rows.filter(r => r.name.toLowerCase().includes(q) || (r.title||'').toLowerCase().includes(q));
   rows = rows.slice().sort((a,b)=>{
-    const av=a[rosterSort.key], bv=b[rosterSort.key];
+    const key = rosterSort.key === 'tenure_years' ? 'tenureAsOf' : rosterSort.key;
+    const av=a[key], bv=b[key];
     if(typeof av==='number') return (av-bv)*rosterSort.dir;
     return String(av).localeCompare(String(bv))*rosterSort.dir;
   });
-  document.getElementById('rosterDesc').textContent = `${rows.length} of ${DATA.roster.length} active employees shown`;
+  const scope = usingDefault ? '' : ` hired by ${fmtDate(range.to)}`;
+  document.getElementById('rosterDesc').textContent = `${rows.length} of ${DATA.roster.length} active employees shown${scope}`;
   const tbody = document.querySelector('#rosterTable tbody');
   tbody.innerHTML = rows.map(r=>`<tr>
       <td>${r.name}</td><td>${r.title||''}</td><td>${DEPT_LABEL(r.department)}</td>
-      <td>${r.location||''}</td><td>${fmtDate(r.start_date)}</td><td>${r.tenure_years}</td>
-    </tr>`).join('');
+      <td>${r.location||''}</td><td>${fmtDate(r.start_date)}</td><td>${r.tenureAsOf.toFixed(1)}</td>
+    </tr>`).join('') || '<tr><td colspan="6" style="color:#635f78;">No employees match this range/department.</td></tr>';
 }
 
 document.querySelectorAll('#rosterTable th').forEach(th=>{
@@ -429,6 +694,11 @@ function renderAll(){
   renderMix();
   renderHireTerm();
   renderStack();
+  renderAttrition();
+  renderTenure();
+  renderLocation();
+  renderGrowth();
+  renderCumulative();
   renderEvents();
   renderRoster();
 }
