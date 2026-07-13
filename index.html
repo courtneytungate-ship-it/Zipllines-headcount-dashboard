@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Ziplines Education — Headcount Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #241451; --teal: #241451; --teal-light:#eceafa; --slate:#635f78;
+    --bg:#f5f4f9; --card:#ffffff; --border:#e3e0ef; --red:#c1443a; --amber:#c98a1f;
+    --green:#1f9d5c; --highlight:#dfe140; --highlight-ink:#241451;
+    --font-head: 'Lora', Georgia, serif;
+    --font-body: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: var(--font-body); background: var(--bg); color: var(--navy); }
+  header { background: linear-gradient(135deg, var(--navy), #3a2472); color: #fff; padding: 28px 36px; display:flex; justify-content:space-between; align-items:flex-end; flex-wrap:wrap; gap:16px; border-bottom: 3px solid var(--highlight); }
+  header h1 { margin: 0 0 4px 0; font-family: var(--font-head); font-size: 25px; font-weight: 700; letter-spacing: 0.2px; }
+  header p { margin:0; color: #cdc6e6; font-size: 13px; }
+  .controls { display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; }
+  .control-group { display:flex; flex-direction:column; gap:4px; }
+  .control-group label { color:#cdc6e6; font-size:11px; text-transform:uppercase; letter-spacing:0.3px; }
+  select, input[type=text], input[type=date] { padding:8px 12px; border-radius:8px; border:1px solid #4a3a7a; background:#2f1d63; color:#fff; font-size:13px; font-family: var(--font-body); }
+  select:focus, input:focus { outline: 2px solid var(--highlight); }
+  input[type=date]::-webkit-calendar-picker-indicator { filter: invert(1); }
+  button.btn-reset { padding:8px 14px; border-radius:8px; border:1px solid var(--highlight); background:transparent; color:var(--highlight); font-size:13px; font-family: var(--font-body); font-weight:600; cursor:pointer; }
+  button.btn-reset:hover { background: var(--highlight); color: var(--highlight-ink); }
+  main { padding: 24px 36px 48px; max-width: 1320px; margin: 0 auto; }
+  .kpis { display:grid; grid-template-columns: repeat(5, 1fr); gap:16px; margin-bottom:24px; }
+  .kpi { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:16px 18px; border-top: 3px solid var(--highlight); }
+  .kpi .label { font-size:12px; color:var(--slate); text-transform:uppercase; letter-spacing:0.4px; margin-bottom:8px; }
+  .kpi .value { font-family: var(--font-head); font-size:28px; font-weight:700; color:var(--navy); }
+  .kpi .sub { font-size:12px; margin-top:6px; font-weight:600; }
+  .sub.pos { color: var(--green); } .sub.neg { color: var(--red); } .sub.neutral { color: var(--slate); }
+  .grid2 { display:grid; grid-template-columns: 2fr 1fr; gap:16px; margin-bottom:16px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:12px; padding:18px 20px; }
+  .card h2 { font-family: var(--font-head); font-size:16px; font-weight:600; margin:0 0 4px 0; color:var(--navy); }
+  .card .desc { font-size:12px; color:var(--slate); margin:0 0 14px 0; }
+  .chart-wrap { position:relative; height: 280px; }
+  .chart-wrap.tall { height: 340px; }
+  table { width:100%; border-collapse: collapse; font-size:13px; }
+  th, td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--border); }
+  th { color:var(--slate); font-weight:600; font-size:11px; text-transform:uppercase; letter-spacing:0.3px; cursor:pointer; user-select:none; position: sticky; top:0; background:var(--card);}
+  tr:hover td { background: #faf9fd; }
+  .badge { display:inline-block; padding:2px 9px; border-radius:999px; font-size:11px; font-weight:700; }
+  .badge.hire { background:var(--highlight); color:var(--highlight-ink); }
+  .badge.termination { background:#fbe9e7; color:var(--red); }
+  .table-scroll { max-height: 420px; overflow-y:auto; }
+  .searchbar { margin-bottom:12px; display:flex; gap:10px; }
+  .searchbar input { border:1px solid var(--border); color: var(--navy); background:#fff; flex:1; }
+  footer { text-align:center; color:var(--slate); font-size:12px; padding:24px; }
+  .note { font-size:11px; color:var(--slate); margin-top:10px; }
+  @media (max-width: 1000px) {
+    .kpis { grid-template-columns: repeat(2,1fr); }
+    .grid2 { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Ziplines Education — Headcount Dashboard</h1>
+    <p id="asOf"></p>
+  </div>
+  <div class="controls">
+    <div class="control-group">
+      <label for="deptFilter">Department</label>
+      <select id="deptFilter"></select>
+    </div>
+    <div class="control-group">
+      <label for="dateFrom">From</label>
+      <input type="date" id="dateFrom">
+    </div>
+    <div class="control-group">
+      <label for="dateTo">To</label>
+      <input type="date" id="dateTo">
+    </div>
+    <button class="btn-reset" id="resetRange" type="button">Reset Range</button>
+  </div>
+</header>
+
+<main>
+  <div class="kpis" id="kpiRow"></div>
+
+  <div class="grid2">
+    <div class="card">
+      <h2>Headcount Trend</h2>
+      <p class="desc" id="trendDesc">Month-end headcount and active-during-month, Jan 2024 – Jul 2026 (Jul partial, through 7/13)</p>
+      <div class="chart-wrap tall"><canvas id="trendChart"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>Current Department Mix</h2>
+      <p class="desc" id="mixDesc">As of Jul 13, 2026</p>
+      <div class="chart-wrap tall"><canvas id="mixChart"></canvas></div>
+    </div>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <h2>New Hires vs. Terminations</h2>
+      <p class="desc" id="hireTermDesc">By month</p>
+      <div class="chart-wrap"><canvas id="hireTermChart"></canvas></div>
+    </div>
+    <div class="card">
+      <h2>Department Composition Over Time</h2>
+      <p class="desc" id="stackDesc">Last 12 months, month-end headcount</p>
+      <div class="chart-wrap"><canvas id="stackChart"></canvas></div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:16px;">
+    <h2>Activity</h2>
+    <p class="desc" id="eventsDesc">Hires and terminations, last 90 days (through Jul 13, 2026)</p>
+    <div class="table-scroll">
+      <table id="eventsTable">
+        <thead><tr><th>Date</th><th>Type</th><th>Name</th><th>Title</th><th>Department</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Current Roster</h2>
+    <p class="desc" id="rosterDesc"></p>
+    <div class="searchbar">
+      <input type="text" id="rosterSearch" placeholder="Search name or title…">
+    </div>
+    <div class="table-scroll">
+      <table id="rosterTable">
+        <thead>
+          <tr>
+            <th data-key="name">Name</th><th data-key="title">Title</th><th data-key="department">Department</th>
+            <th data-key="location">Location</th><th data-key="start_date">Start Date</th><th data-key="tenure_years">Tenure (yrs)</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+</main>
+
+<footer>Built from Employee Master Report (Sequoia/PrismHR) + current HRIS export · Deel contractors (Growth) reconciled into department totals</footer>
+
+<script id="dashboard-data" type="application/json">{"monthly": [{"month": "Jan 2024", "month_key": "2024-01", "active_during_month": 21, "month_end_headcount": 21, "new_hires": 3, "terminations": 0, "dept_counts": {"1000 - Growth": 6, "2000 - Operations": 5, "2100 - Legal": 0, "2200 - People Operations": 0, "3000 - Learning Design": 4, "4000 - Business Development": 0, "5000 - Corporate": 1, "6000 - Enrollment": 2, "7000 - University Partnerships": 2, "8000 - Learning Live": 1, "9000 - Technology": 0, "Unassigned": 0, "Product": 0}}, {"month": "Feb 2024", "month_key": "2024-02", "active_during_month": 22, "month_end_headcount": 21, "new_hires": 1, "terminations": 1, "dept_counts": {"1000 - Growth": 6, "2000 - Operations": 4, "2100 - Legal": 0, "2200 - People Operations": 0, "3000 - Learning Design": 4, "4000 - Business Development": 1, "5000 - Corporate": 1, "6000 - Enrollment": 2, "7000 - University Partnerships": 2, "8000 - Learning Live": 1, "9000 - Technology": 0, "Unassigned": 0, "Product": 0}}, {"month": "Mar 2024", "month_key": "2024-03", "active_during_month": 23, "month_end_headcount": 23, "new_hires": 2, "terminations": 0, "dept_counts": {"1000 - Growth": 6, "2000 - Operations": 4, "2100 - Legal": 0, "2200 - People Operations": 0, "3000 - Learning Design": 5, "4000 - Business Development": 1, "5000 - Corporate": 1, "6000 - Enrollment": 3, "7000 - University Partnerships": 2, "8000 - Learning Live": 1, "9000 - Technology": 0, "Unassigned": 0, "Product": 0}}, {"month": "Apr 2024", "month_key": "2024-04", "active_during_month": 25, "month_end_headcount": 25, "new_hires": 2, "terminations": 0, "dept_counts": {"1000 - Growth": 7, "2000 - Operations": 4, "2100 - Legal": 0, "2200 - People Operations": 0, "3000 - Learning Design": 5, "4000 - Business Development": 1, "5000 - Corporate": 1, "6000 - Enrollment": 3, "7000 - University Partnerships": 2, "8000 - Learning Live": 2, "9000 - Technology": 0, "Unassigned": 0, "Product": 0}}, {"month": "May 2024", "month_key": "2024-05", "active_during_month": 26, "month_end_headcount": 26, "new_hires": 1, "terminations": 0, "dept_counts": {"1000 - Growth": 7, "2000 - Operations": 4, "2100 - Legal": 0, "2200 - People Operations": 0, "3000 - Learning Design": 5, "4000 - Business Development": 1, "5000 - Corporate": 1, "6000 - Enrollment": 3, "7000 - University Partnerships": 2, "8000 - Learning Live": 2, "9000 - Technology": 1, "Unassigned": 0, "Product": 0}}, {"month": "Jun 2024", "month_key": "2024-06", "active_during_month": 26, "month_end_headcount": 25, "new_hires": 0, "terminations": 1, "dept_counts": {"1000 - Growth": 7, "2000 - Operations": 4, "2100 - Legal": 0, "2200 - People Operations": 0, "3000 - Learning Design": 4, "4000 - Business Development": 1, "5000 - Corporate": 1, "6000 - Enrollment": 3, "7000 - University Partnerships": 2, "8000 - Learning Live": 2, "9000 - Technology": 1, "Unassigned": 0, "Product": 0}}, {"month": "Jul 2024", "month_key": "2024-07", "active_during_month": 27, "month_end_headcount": 26, "new_hires": 2, "terminations": 1, "dept_counts": {"1000 - Growth": 7, "2000 - Operations": 4, "2100 - Legal": 0, "2200 - People Operations": 0, "3000 - Learning Design": 4, "4000 - Business Development": 1, "5000 - Corporate": 1, "6000 - Enrollment": 4, "7000 - University Partnerships": 2, "8000 - Learning Live": 2, "9000 - Technology": 1, "Unassigned": 0, "Product": 0}}, {"month": "Aug 2024", "month_key": "2024-08", "active_during_month": 27, "month_end_headcount": 27, "new_hires": 1, "terminations": 0, "dept_counts": {"1000 - Growth": 7, "2000 - Operations": 4, "2100 - Legal": 0, "2200 - People Operations": 0, "3000 - Learning Design": 5, "4000 - Business Development": 1, "5000 - Corporate": 1, "6000 - Enrollment": 4, "7000 - University Partnerships": 2, "8000 - Learning Live": 2, "9000 - Technology": 1, "Unassigned": 0, "Product": 0}}, {"month": "Sep 2024", "month_key": "2024-09", "active_during_month": 32, "month_end_headcount": 32, "new_hires": 5, "terminations": 0, "dept_counts": {"1000 - Growth": 7, "2000 - Operations": 5, "2100 - Legal": 1, "2200 - People Operations": 0, "3000 - Learning Design": 5, "4000 - Business Development": 2, "5000 - Corporate": 1, "6000 - Enrollment": 4, "7000 - University Partnerships": 2, "8000 - Learning Live": 3, "9000 - Technology": 2, "Unassigned": 0, "Product": 0}}, {"month": "Oct 2024", "month_key": "2024-10", "active_during_month": 34, "month_end_headcount": 33, "new_hires": 2, "terminations": 1, "dept_counts": {"1000 - Growth": 8, "2000 - Operations": 4, "2100 - Legal": 1, "2200 - People Operations": 1, "3000 - Learning Design": 5, "4000 - Business Development": 2, "5000 - Corporate": 1, "6000 - Enrollment": 4, "7000 - University Partnerships": 2, "8000 - Learning Live": 3, "9000 - Technology": 2, "Unassigned": 0, "Product": 0}}, {"month": "Nov 2024", "month_key": "2024-11", "active_during_month": 33, "month_end_headcount": 33, "new_hires": 0, "terminations": 0, "dept_counts": {"1000 - Growth": 8, "2000 - Operations": 4, "2100 - Legal": 1, "2200 - People Operations": 1, "3000 - Learning Design": 5, "4000 - Business Development": 2, "5000 - Corporate": 1, "6000 - Enrollment": 4, "7000 - University Partnerships": 2, "8000 - Learning Live": 3, "9000 - Technology": 2, "Unassigned": 0, "Product": 0}}, {"month": "Dec 2024", "month_key": "2024-12", "active_during_month": 34, "month_end_headcount": 34, "new_hires": 1, "terminations": 0, "dept_counts": {"1000 - Growth": 8, "2000 - Operations": 5, "2100 - Legal": 1, "2200 - People Operations": 1, "3000 - Learning Design": 5, "4000 - Business Development": 2, "5000 - Corporate": 1, "6000 - Enrollment": 4, "7000 - University Partnerships": 2, "8000 - Learning Live": 3, "9000 - Technology": 2, "Unassigned": 0, "Product": 0}}, {"month": "Jan 2025", "month_key": "2025-01", "active_during_month": 37, "month_end_headcount": 37, "new_hires": 3, "terminations": 0, "dept_counts": {"1000 - Growth": 8, "2000 - Operations": 5, "2100 - Legal": 1, "2200 - People Operations": 1, "3000 - Learning Design": 5, "4000 - Business Development": 2, "5000 - Corporate": 2, "6000 - Enrollment": 4, "7000 - University Partnerships": 3, "8000 - Learning Live": 3, "9000 - Technology": 2, "Unassigned": 0, "Product": 1}}, {"month": "Feb 2025", "month_key": "2025-02", "active_during_month": 43, "month_end_headcount": 43, "new_hires": 6, "terminations": 0, "dept_counts": {"1000 - Growth": 11, "2000 - Operations": 5, "2100 - Legal": 1, "2200 - People Operations": 1, "3000 - Learning Design": 5, "4000 - Business Development": 2, "5000 - Corporate": 3, "6000 - Enrollment": 5, "7000 - University Partnerships": 3, "8000 - Learning Live": 4, "9000 - Technology": 2, "Unassigned": 0, "Product": 1}}, {"month": "Mar 2025", "month_key": "2025-03", "active_during_month": 44, "month_end_headcount": 43, "new_hires": 1, "terminations": 1, "dept_counts": {"1000 - Growth": 11, "2000 - Operations": 5, "2100 - Legal": 1, "2200 - People Operations": 1, "3000 - Learning Design": 5, "4000 - Business Development": 2, "5000 - Corporate": 3, "6000 - Enrollment": 5, "7000 - University Partnerships": 3, "8000 - Learning Live": 4, "9000 - Technology": 2, "Unassigned": 0, "Product": 1}}, {"month": "Apr 2025", "month_key": "2025-04", "active_during_month": 45, "month_end_headcount": 45, "new_hires": 2, "terminations": 0, "dept_counts": {"1000 - Growth": 12, "2000 - Operations": 5, "2100 - Legal": 1, "2200 - People Operations": 2, "3000 - Learning Design": 5, "4000 - Business Development": 2, "5000 - Corporate": 3, "6000 - Enrollment": 5, "7000 - University Partnerships": 3, "8000 - Learning Live": 4, "9000 - Technology": 2, "Unassigned": 0, "Product": 1}}, {"month": "May 2025", "month_key": "2025-05", "active_during_month": 48, "month_end_headcount": 47, "new_hires": 3, "terminations": 1, "dept_counts": {"1000 - Growth": 13, "2000 - Operations": 5, "2100 - Legal": 1, "2200 - People Operations": 2, "3000 - Learning Design": 6, "4000 - Business Development": 2, "5000 - Corporate": 3, "6000 - Enrollment": 4, "7000 - University Partnerships": 3, "8000 - Learning Live": 4, "9000 - Technology": 3, "Unassigned": 0, "Product": 1}}, {"month": "Jun 2025", "month_key": "2025-06", "active_during_month": 48, "month_end_headcount": 47, "new_hires": 1, "terminations": 1, "dept_counts": {"1000 - Growth": 13, "2000 - Operations": 5, "2100 - Legal": 1, "2200 - People Operations": 2, "3000 - Learning Design": 5, "4000 - Business Development": 2, "5000 - Corporate": 3, "6000 - Enrollment": 4, "7000 - University Partnerships": 3, "8000 - Learning Live": 4, "9000 - Technology": 3, "Unassigned": 0, "Product": 2}}, {"month": "Jul 2025", "month_key": "2025-07", "active_during_month": 48, "month_end_headcount": 47, "new_hires": 1, "terminations": 1, "dept_counts": {"1000 - Growth": 13, "2000 - Operations": 5, "2100 - Legal": 1, "2200 - People Operations": 2, "3000 - Learning Design": 5, "4000 - Business Development": 2, "5000 - Corporate": 3, "6000 - Enrollment": 4, "7000 - University Partnerships": 3, "8000 - Learning Live": 4, "9000 - Technology": 3, "Unassigned": 0, "Product": 2}}, {"month": "Aug 2025", "month_key": "2025-08", "active_during_month": 47, "month_end_headcount": 41, "new_hires": 0, "terminations": 6, "dept_counts": {"1000 - Growth": 10, "2000 - Operations": 5, "2100 - Legal": 1, "2200 - People Operations": 1, "3000 - Learning Design": 5, "4000 - Business Development": 1, "5000 - Corporate": 3, "6000 - Enrollment": 3, "7000 - University Partnerships": 3, "8000 - Learning Live": 4, "9000 - Technology": 3, "Unassigned": 0, "Product": 2}}, {"month": "Sep 2025", "month_key": "2025-09", "active_during_month": 41, "month_end_headcount": 40, "new_hires": 0, "terminations": 1, "dept_counts": {"1000 - Growth": 10, "2000 - Operations": 5, "2100 - Legal": 1, "2200 - People Operations": 1, "3000 - Learning Design": 5, "4000 - Business Development": 1, "5000 - Corporate": 3, "6000 - Enrollment": 3, "7000 - University Partnerships": 3, "8000 - Learning Live": 4, "9000 - Technology": 2, "Unassigned": 0, "Product": 2}}, {"month": "Oct 2025", "month_key": "2025-10", "active_during_month": 40, "month_end_headcount": 38, "new_hires": 0, "terminations": 2, "dept_counts": {"1000 - Growth": 8, "2000 - Operations": 5, "2100 - Legal": 1, "2200 - People Operations": 1, "3000 - Learning Design": 5, "4000 - Business Development": 1, "5000 - Corporate": 3, "6000 - Enrollment": 3, "7000 - University Partnerships": 3, "8000 - Learning Live": 4, "9000 - Technology": 2, "Unassigned": 0, "Product": 2}}, {"month": "Nov 2025", "month_key": "2025-11", "active_during_month": 38, "month_end_headcount": 36, "new_hires": 0, "terminations": 2, "dept_counts": {"1000 - Growth": 8, "2000 - Operations": 5, "2100 - Legal": 1, "2200 - People Operations": 1, "3000 - Learning Design": 5, "4000 - Business Development": 1, "5000 - Corporate": 2, "6000 - Enrollment": 3, "7000 - University Partnerships": 2, "8000 - Learning Live": 4, "9000 - Technology": 2, "Unassigned": 0, "Product": 2}}, {"month": "Dec 2025", "month_key": "2025-12", "active_during_month": 36, "month_end_headcount": 35, "new_hires": 0, "terminations": 1, "dept_counts": {"1000 - Growth": 7, "2000 - Operations": 5, "2100 - Legal": 1, "2200 - People Operations": 1, "3000 - Learning Design": 5, "4000 - Business Development": 1, "5000 - Corporate": 2, "6000 - Enrollment": 3, "7000 - University Partnerships": 2, "8000 - Learning Live": 4, "9000 - Technology": 2, "Unassigned": 0, "Product": 2}}, {"month": "Jan 2026", "month_key": "2026-01", "active_during_month": 36, "month_end_headcount": 34, "new_hires": 1, "terminations": 2, "dept_counts": {"1000 - Growth": 7, "2000 - Operations": 5, "2100 - Legal": 1, "2200 - People Operations": 1, "3000 - Learning Design": 5, "4000 - Business Development": 1, "5000 - Corporate": 2, "6000 - Enrollment": 2, "7000 - University Partnerships": 2, "8000 - Learning Live": 4, "9000 - Technology": 2, "Unassigned": 0, "Product": 2}}, {"month": "Feb 2026", "month_key": "2026-02", "active_during_month": 36, "month_end_headcount": 35, "new_hires": 2, "terminations": 1, "dept_counts": {"1000 - Growth": 8, "2000 - Operations": 4, "2100 - Legal": 1, "2200 - People Operations": 1, "3000 - Learning Design": 5, "4000 - Business Development": 1, "5000 - Corporate": 2, "6000 - Enrollment": 2, "7000 - University Partnerships": 2, "8000 - Learning Live": 4, "9000 - Technology": 2, "Unassigned": 0, "Product": 3}}, {"month": "Mar 2026", "month_key": "2026-03", "active_during_month": 35, "month_end_headcount": 35, "new_hires": 0, "terminations": 0, "dept_counts": {"1000 - Growth": 8, "2000 - Operations": 4, "2100 - Legal": 1, "2200 - People Operations": 1, "3000 - Learning Design": 5, "4000 - Business Development": 1, "5000 - Corporate": 2, "6000 - Enrollment": 2, "7000 - University Partnerships": 2, "8000 - Learning Live": 4, "9000 - Technology": 2, "Unassigned": 0, "Product": 3}}, {"month": "Apr 2026", "month_key": "2026-04", "active_during_month": 36, "month_end_headcount": 35, "new_hires": 1, "terminations": 1, "dept_counts": {"1000 - Growth": 8, "2000 - Operations": 4, "2100 - Legal": 1, "2200 - People Operations": 1, "3000 - Learning Design": 4, "4000 - Business Development": 2, "5000 - Corporate": 2, "6000 - Enrollment": 2, "7000 - University Partnerships": 2, "8000 - Learning Live": 4, "9000 - Technology": 2, "Unassigned": 0, "Product": 3}}, {"month": "May 2026", "month_key": "2026-05", "active_during_month": 36, "month_end_headcount": 36, "new_hires": 1, "terminations": 0, "dept_counts": {"1000 - Growth": 9, "2000 - Operations": 4, "2100 - Legal": 1, "2200 - People Operations": 1, "3000 - Learning Design": 4, "4000 - Business Development": 2, "5000 - Corporate": 2, "6000 - Enrollment": 2, "7000 - University Partnerships": 2, "8000 - Learning Live": 4, "9000 - Technology": 2, "Unassigned": 0, "Product": 3}}, {"month": "Jun 2026", "month_key": "2026-06", "active_during_month": 38, "month_end_headcount": 38, "new_hires": 2, "terminations": 0, "dept_counts": {"1000 - Growth": 9, "2000 - Operations": 4, "2100 - Legal": 1, "2200 - People Operations": 1, "3000 - Learning Design": 6, "4000 - Business Development": 2, "5000 - Corporate": 2, "6000 - Enrollment": 2, "7000 - University Partnerships": 2, "8000 - Learning Live": 4, "9000 - Technology": 2, "Unassigned": 0, "Product": 3}}, {"month": "Jul 2026", "month_key": "2026-07", "active_during_month": 39, "month_end_headcount": 38, "new_hires": 1, "terminations": 1, "dept_counts": {"1000 - Growth": 8, "2000 - Operations": 4, "2100 - Legal": 1, "2200 - People Operations": 1, "3000 - Learning Design": 6, "4000 - Business Development": 2, "5000 - Corporate": 2, "6000 - Enrollment": 3, "7000 - University Partnerships": 2, "8000 - Learning Live": 4, "9000 - Technology": 2, "Unassigned": 0, "Product": 3}}], "roster": [{"name": "Cylita Guy", "title": "Sr. Data Scientist", "department": "1000 - Growth", "location": "Canada", "start_date": "2025-02-24", "tenure_years": 1.4, "manager": "Megan Dawn Dixon"}, {"name": "Devin O'Sullivan", "title": "Senior Paid Social Manager", "department": "1000 - Growth", "location": "Canada", "start_date": "2025-02-01", "tenure_years": 1.4, "manager": "Megan Dawn Dixon"}, {"name": "Erica Smith", "title": "Markerting QA Specialist", "department": "2000 - Operations", "location": "Washington", "start_date": "2024-12-12", "tenure_years": 1.6, "manager": "Taylor Brown Walton"}, {"name": "Hillary E Evans", "title": "Senior Lifecycle Marketing Manager", "department": "1000 - Growth", "location": "Georgia", "start_date": "2026-02-09", "tenure_years": 0.4, "manager": "Megan Dawn Dixon"}, {"name": "Jacinta J Gardner", "title": "Senior Paid Search Manager", "department": "1000 - Growth", "location": "Georgia", "start_date": "2025-04-07", "tenure_years": 1.3, "manager": "Megan Dawn Dixon"}, {"name": "Maxim Holmes Withers", "title": "Data Scientist", "department": "1000 - Growth", "location": "Colorado", "start_date": "2026-01-05", "tenure_years": 0.5, "manager": "Megan Dawn Dixon"}, {"name": "Megan Dixon", "title": "V.P. of Data", "department": "1000 - Growth", "location": "Canada", "start_date": "2025-02-01", "tenure_years": 1.4, "manager": "Philippe Huibonhoa"}, {"name": "Michael T Loyd", "title": "Senior Marketing Manager", "department": "1000 - Growth", "location": "Colorado", "start_date": "2026-05-26", "tenure_years": 0.1, "manager": "Megan Dawn Dixon"}, {"name": "Shae A Rosemore", "title": "Lifecycle Marketing Mgr (WA)", "department": "1000 - Growth", "location": "Washington", "start_date": "2025-05-14", "tenure_years": 1.2, "manager": "Megan Dawn Dixon"}, {"name": "Alison L Banuski", "title": "Visual Design Lead, Learning Experience", "department": "3000 - Learning Design", "location": "New York", "start_date": "2024-03-04", "tenure_years": 2.4, "manager": "Le'a J Kent"}, {"name": "Jessica J Garcia-Brooker", "title": "Course Coordinator", "department": "2000 - Operations", "location": "Georgia", "start_date": "2024-09-03", "tenure_years": 1.9, "manager": "Taylor Brown Walton"}, {"name": "Juli L Zarzour", "title": "Chief Operating Officer", "department": "2000 - Operations", "location": "California", "start_date": "2019-10-01", "tenure_years": 6.8, "manager": "Sara A Leoni"}, {"name": "Taylor Brown Walton", "title": "Manager, Platform Production", "department": "2000 - Operations", "location": "South Carolina", "start_date": "2023-01-23", "tenure_years": 3.5, "manager": "Juli L Zarzour"}, {"name": "Daniel Seth Berger", "title": "VP, General Counsel", "department": "2100 - Legal", "location": "Florida", "start_date": "2024-09-16", "tenure_years": 1.8, "manager": "Sara A Leoni"}, {"name": "Courtney M Tungate", "title": "Director of People", "department": "2200 - People Operations", "location": "Colorado", "start_date": "2024-10-07", "tenure_years": 1.8, "manager": "Kelvin K Lau"}, {"name": "Emily Ousley", "title": "Senior Learning Experience Des", "department": "3000 - Learning Design", "location": "Texas", "start_date": "2026-06-01", "tenure_years": 0.1, "manager": "Le'a J Kent"}, {"name": "Jordin Dyke", "title": "Principal Learning Experience Designer", "department": "3000 - Learning Design", "location": "Florida", "start_date": "2022-07-01", "tenure_years": 4.0, "manager": "Le'a J Kent"}, {"name": "Le'a J Kent", "title": "Director, Learning Design", "department": "3000 - Learning Design", "location": "Washington", "start_date": "2024-08-26", "tenure_years": 1.9, "manager": "Robert J Santamaria"}, {"name": "Polly B Ritter", "title": "Learning Experience Designer", "department": "3000 - Learning Design", "location": "Virginia", "start_date": "2025-05-05", "tenure_years": 1.2, "manager": "Le'a J Kent"}, {"name": "Samina Sami", "title": "Senior Learning Experience Des", "department": "3000 - Learning Design", "location": "New York", "start_date": "2026-06-04", "tenure_years": 0.1, "manager": "Le'a J Kent"}, {"name": "Catherine L Cook", "title": "Director of Strategic Partnerships", "department": "4000 - Business Development", "location": "California", "start_date": "2026-04-01", "tenure_years": 0.3, "manager": "Clayton A Dean"}, {"name": "Clayton A Dean", "title": "V. P. Business Development", "department": "4000 - Business Development", "location": "Florida", "start_date": "2024-02-05", "tenure_years": 2.4, "manager": "Sara A Leoni"}, {"name": "Kelvin K Lau", "title": "Vice President, Finance", "department": "5000 - Corporate", "location": "California", "start_date": "2025-01-13", "tenure_years": 1.5, "manager": "Sara A Leoni"}, {"name": "Robert J Santamaria", "title": "Vice President, Portfolio Strategy", "department": "Product", "location": "Maine", "start_date": "2025-06-30", "tenure_years": 1.0, "manager": "Sara A Leoni"}, {"name": "Sara A Leoni", "title": "Chief Executive Officer", "department": "5000 - Corporate", "location": "California", "start_date": "2018-02-08", "tenure_years": 8.4, "manager": "Head Employee"}, {"name": "Anna Iuppa Turnbull", "title": "Product Communications Manager", "department": "Product", "location": "New York", "start_date": "2025-01-27", "tenure_years": 1.5, "manager": "Robert J Santamaria"}, {"name": "Kyla G Sanderson", "title": "Enrollment Specialist", "department": "6000 - Enrollment", "location": "North Carolina", "start_date": "2024-07-08", "tenure_years": 2.0, "manager": "Andreia Raluca Ieva"}, {"name": "Paul W Croswell", "title": "Admissions Lead", "department": "6000 - Enrollment", "location": "North Carolina", "start_date": "2026-07-06", "tenure_years": 0.0, "manager": "Juli L Zarzour"}, {"name": "Nicholas Courtney", "title": "Partner Operations Manager", "department": "7000 - University Partnerships", "location": "Maryland", "start_date": "2025-01-21", "tenure_years": 1.5, "manager": "Clayton A Dean"}, {"name": "Wendy M Jandrew", "title": "Director, University Relations", "department": "7000 - University Partnerships", "location": "Florida", "start_date": "2021-11-01", "tenure_years": 4.7, "manager": "Clayton A Dean"}, {"name": "Jence Rhoads", "title": "Director, Learner Success", "department": "8000 - Learning Live", "location": "Alabama", "start_date": "2021-03-01", "tenure_years": 5.4, "manager": "Juli L Zarzour"}, {"name": "Jessica Eunice C Tang", "title": "Manager, Live Session Instr", "department": "8000 - Learning Live", "location": "Florida", "start_date": "2024-09-03", "tenure_years": 1.9, "manager": "Jence Rhoads"}, {"name": "Ozanne M Alexander", "title": "Manager, Learner Success Adv", "department": "8000 - Learning Live", "location": "Georgia", "start_date": "2024-04-29", "tenure_years": 2.2, "manager": "Jence Rhoads"}, {"name": "Rachel Koestner", "title": "Learner Service Specialist", "department": "8000 - Learning Live", "location": "California", "start_date": "2025-02-24", "tenure_years": 1.4, "manager": "Jence Rhoads"}, {"name": "Connie Y Au", "title": "Senior Product Manager", "department": "9000 - Technology", "location": "California", "start_date": "2025-05-12", "tenure_years": 1.2, "manager": "Philippe Huibonhoa"}, {"name": "Philippe Huibonhoa", "title": "Chief Technology Officer", "department": "9000 - Technology", "location": "California", "start_date": "2024-05-06", "tenure_years": 2.2, "manager": "Sara A Leoni"}, {"name": "Courtney E Campbell", "title": "Product Operations Manager", "department": "Product", "location": "Oregon TriMet", "start_date": "2026-02-23", "tenure_years": 0.4, "manager": "Robert J Santamaria"}, {"name": "Taylor A Scarboro", "title": "Enrollment Services Specialist", "department": "6000 - Enrollment", "location": "Pennsylvania", "start_date": "2025-02-10", "tenure_years": 1.4, "manager": "Juli L Zarzour"}], "events": [{"type": "hire", "name": "Diego Rodriguez", "department": "1000 - Growth", "date": "2024-01-02", "title": "Sr Paid Social Performance Mrt", "month": "Jan 2024"}, {"type": "hire", "name": "Taylor Ingalls", "department": "1000 - Growth", "date": "2024-01-09", "title": "Senior Business Analyst", "month": "Jan 2024"}, {"type": "hire", "name": "Alyssa Retzena", "department": "3000 - Learning Design", "date": "2024-01-09", "title": "Senior Learning Experience Des", "month": "Jan 2024"}, {"type": "hire", "name": "Clayton Dean", "department": "4000 - Business Development", "date": "2024-02-05", "title": "V. P. Business Development", "month": "Feb 2024"}, {"type": "termination", "name": "Azaila Powell", "department": "2000 - Operations", "date": "2024-02-09", "title": "Enrollment Specialist", "month": "Feb 2024"}, {"type": "hire", "name": "Alison Banuski", "department": "3000 - Learning Design", "date": "2024-03-04", "title": "Visual Design Lead, Learning Experience", "month": "Mar 2024"}, {"type": "hire", "name": "Andreia Ieva", "department": "6000 - Enrollment", "date": "2024-03-26", "title": "Enrollment Manager", "month": "Mar 2024"}, {"type": "hire", "name": "Madeline Deutsch", "department": "1000 - Growth", "date": "2024-04-01", "title": "VP, Analytics and Insights", "month": "Apr 2024"}, {"type": "hire", "name": "Ozanne Alexander", "department": "8000 - Learning Live", "date": "2024-04-29", "title": "Manager, Learner Success Adv", "month": "Apr 2024"}, {"type": "hire", "name": "Philippe Huibonhoa", "department": "9000 - Technology", "date": "2024-05-06", "title": "Chief Technology Officer", "month": "May 2024"}, {"type": "termination", "name": "Samuel Nelson", "department": "3000 - Learning Design", "date": "2024-06-12", "title": "Head of Learning Product", "month": "Jun 2024"}, {"type": "termination", "name": "Carolyn Wakulchik", "department": "3000 - Learning Design", "date": "2024-07-05", "title": "VP Product & Learning Design", "month": "Jul 2024"}, {"type": "hire", "name": "Kyla Sanderson", "department": "6000 - Enrollment", "date": "2024-07-08", "title": "Enrollment Specialist", "month": "Jul 2024"}, {"type": "hire", "name": "Gina Hinton", "department": "3000 - Learning Design", "date": "2024-07-29", "title": "Senior Learning Experience Des", "month": "Jul 2024"}, {"type": "hire", "name": "Le'a Kent", "department": "3000 - Learning Design", "date": "2024-08-26", "title": "Director, Learning Design", "month": "Aug 2024"}, {"type": "hire", "name": "Jessica Garcia-Brooker", "department": "2000 - Operations", "date": "2024-09-03", "title": "Course Coordinator", "month": "Sep 2024"}, {"type": "hire", "name": "Jeffery Sample", "department": "9000 - Technology", "date": "2024-09-03", "title": "Vice President, Product", "month": "Sep 2024"}, {"type": "hire", "name": "Jessica Eunice Tang", "department": "8000 - Learning Live", "date": "2024-09-03", "title": "Manager, Live Session Instr", "month": "Sep 2024"}, {"type": "hire", "name": "Caitlin Kanaly", "department": "4000 - Business Development", "date": "2024-09-09", "title": "Sr Mnger, Corporate Marketing", "month": "Sep 2024"}, {"type": "hire", "name": "Daniel Berger", "department": "2100 - Legal", "date": "2024-09-16", "title": "VP, General Counsel", "month": "Sep 2024"}, {"type": "hire", "name": "Courtney Tungate", "department": "2200 - People Operations", "date": "2024-10-07", "title": "Director of People", "month": "Oct 2024"}, {"type": "termination", "name": "Arthur Carrier", "department": "2000 - Operations", "date": "2024-10-11", "title": "Vice President, Finance", "month": "Oct 2024"}, {"type": "hire", "name": "Jill Musguire", "department": "1000 - Growth", "date": "2024-10-28", "title": "Director, Product Marketing", "month": "Oct 2024"}, {"type": "hire", "name": "Erica Smith", "department": "2000 - Operations", "date": "2024-12-12", "title": "Markerting QA Specialist", "month": "Dec 2024"}, {"type": "hire", "name": "Kelvin Lau", "department": "5000 - Corporate", "date": "2025-01-13", "title": "Vice President, Finance", "month": "Jan 2025"}, {"type": "hire", "name": "Nicholas Courtney", "department": "7000 - University Partnerships", "date": "2025-01-21", "title": "Partner Operations Manager", "month": "Jan 2025"}, {"type": "hire", "name": "Anna Turnbull", "department": "Product", "date": "2025-01-27", "title": "Digital Communications Specialist", "month": "Jan 2025"}, {"type": "hire", "name": "Megan Dixon", "department": "1000 - Growth", "date": "2025-02-01", "title": "VP, Data and Growth", "month": "Feb 2025"}, {"type": "hire", "name": "Devin O'Sullivan", "department": "1000 - Growth", "date": "2025-02-01", "title": "Senior Paid Social Manager", "month": "Feb 2025"}, {"type": "hire", "name": "Taylor Scarboro", "department": "6000 - Enrollment", "date": "2025-02-10", "title": "Enrollment Services Specialist", "month": "Feb 2025"}, {"type": "hire", "name": "Peter Poer", "department": "5000 - Corporate", "date": "2025-02-18", "title": "Chief of Staff", "month": "Feb 2025"}, {"type": "hire", "name": "Rachel Koestner", "department": "8000 - Learning Live", "date": "2025-02-24", "title": "Learner Service Specialist", "month": "Feb 2025"}, {"type": "hire", "name": "Cylita Guy", "department": "1000 - Growth", "date": "2025-02-24", "title": "Senior Data Scientist", "month": "Feb 2025"}, {"type": "hire", "name": "Ceri Phillips", "department": "1000 - Growth", "date": "2025-03-18", "title": "Senior Director of Lifecycle Marketing", "month": "Mar 2025"}, {"type": "termination", "name": "Alyssa Bambrick", "department": "1000 - Growth", "date": "2025-03-28", "title": "Sr Manager, Growth Marketing", "month": "Mar 2025"}, {"type": "hire", "name": "Jacinta Gardner", "department": "1000 - Growth", "date": "2025-04-07", "title": "Senior Paid Search Manager", "month": "Apr 2025"}, {"type": "hire", "name": "Sarah Andrea", "department": "2200 - People Operations", "date": "2025-04-28", "title": "Talent Recruiter", "month": "Apr 2025"}, {"type": "termination", "name": "Stacy Hammerschmidt", "department": "6000 - Enrollment", "date": "2025-05-02", "title": "Director, Admissions", "month": "May 2025"}, {"type": "hire", "name": "Polly Ritter", "department": "3000 - Learning Design", "date": "2025-05-05", "title": "Learning Experience Design Associate", "month": "May 2025"}, {"type": "hire", "name": "Connie Au", "department": "9000 - Technology", "date": "2025-05-12", "title": "Senior Product Manager", "month": "May 2025"}, {"type": "hire", "name": "Shae Rosemore", "department": "1000 - Growth", "date": "2025-05-14", "title": "Lifecycle Marketing Mgr (WA)", "month": "May 2025"}, {"type": "termination", "name": "Gina Hinton", "department": "3000 - Learning Design", "date": "2025-06-24", "title": "Senior Learning Experience Des", "month": "Jun 2025"}, {"type": "hire", "name": "Robert Santamaria", "department": "Product", "date": "2025-06-30", "title": "Vice President, Portfolio Strategy", "month": "Jun 2025"}, {"type": "termination", "name": "Catherine Bull", "department": "1000 - Growth", "date": "2025-07-11", "title": "Manager, Email & CRM Marketing", "month": "Jul 2025"}, {"type": "hire", "name": "Fathima Reeza", "department": "1000 - Growth", "date": "2025-07-28", "title": "Lifecycle Marketing Manager", "month": "Jul 2025"}, {"type": "termination", "name": "Sarah Andrea", "department": "2200 - People Operations", "date": "2025-08-22", "title": "Talent Recruiter", "month": "Aug 2025"}, {"type": "termination", "name": "Melanie Davis", "department": "6000 - Enrollment", "date": "2025-08-22", "title": "Enrollment Specialist", "month": "Aug 2025"}, {"type": "termination", "name": "Taylor Ingalls", "department": "1000 - Growth", "date": "2025-08-22", "title": "Senior Business Analyst", "month": "Aug 2025"}, {"type": "termination", "name": "Caitlin Kanaly", "department": "4000 - Business Development", "date": "2025-08-22", "title": "Sr Mnger, Corporate Marketing", "month": "Aug 2025"}, {"type": "termination", "name": "Ceri Phillips", "department": "1000 - Growth", "date": "2025-08-22", "title": "Senior Director of Lifecycle Marketing", "month": "Aug 2025"}, {"type": "termination", "name": "Alina Urs", "department": "1000 - Growth", "date": "2025-08-22", "title": "Project Coordinator, Marketing", "month": "Aug 2025"}, {"type": "termination", "name": "Jeffery Sample", "department": "9000 - Technology", "date": "2025-09-05", "title": "Vice President, Product", "month": "Sep 2025"}, {"type": "termination", "name": "Madeline Deutsch", "department": "1000 - Growth", "date": "2025-10-15", "title": "VP, Analytics and Insights", "month": "Oct 2025"}, {"type": "termination", "name": "Diego Rodriguez", "department": "1000 - Growth", "date": "2025-10-17", "title": "Sr Paid Social Performance Mrt", "month": "Oct 2025"}, {"type": "termination", "name": "Sheryl Friedman", "department": "7000 - University Partnerships", "date": "2025-11-15", "title": "VP, University Partnerships", "month": "Nov 2025"}, {"type": "termination", "name": "Peter Poer", "department": "5000 - Corporate", "date": "2025-11-19", "title": "Chief of Staff", "month": "Nov 2025"}, {"type": "termination", "name": "Luke Wallace", "department": "1000 - Growth", "date": "2025-12-15", "title": "Chief Growth Officer", "month": "Dec 2025"}, {"type": "termination", "name": "Andreia Ieva", "department": "6000 - Enrollment", "date": "2026-01-02", "title": "Enrollment Manager", "month": "Jan 2026"}, {"type": "hire", "name": "Maxim Withers", "department": "1000 - Growth", "date": "2026-01-05", "title": "Data Scientist", "month": "Jan 2026"}, {"type": "termination", "name": "Fathima Reeza", "department": "1000 - Growth", "date": "2026-01-16", "title": "Lifecycle Marketing Manager", "month": "Jan 2026"}, {"type": "hire", "name": "Hillary Evans", "department": "1000 - Growth", "date": "2026-02-09", "title": "Senior Lifecycle Marketing Manager", "month": "Feb 2026"}, {"type": "hire", "name": "Courtney Campbell", "department": "Product", "date": "2026-02-23", "title": "Product Operations Manager", "month": "Feb 2026"}, {"type": "termination", "name": "Keyna Ledford", "department": "2000 - Operations", "date": "2026-02-27", "title": "Senior Project Manager", "month": "Feb 2026"}, {"type": "hire", "name": "Catherine Cook", "department": "4000 - Business Development", "date": "2026-04-01", "title": "Director of Strategic Partnerships", "month": "Apr 2026"}, {"type": "termination", "name": "Alyssa Retzena", "department": "3000 - Learning Design", "date": "2026-04-29", "title": "Senior Learning Experience Des", "month": "Apr 2026"}, {"type": "hire", "name": "Michael T Loyd", "department": "1000 - Growth", "date": "2026-05-26", "title": "Senior Marketing Manager", "month": "May 2026"}, {"type": "hire", "name": "Emily Ousley", "department": "3000 - Learning Design", "date": "2026-06-01", "title": "Senior Learning Experience Des", "month": "Jun 2026"}, {"type": "hire", "name": "Samina Sami", "department": "3000 - Learning Design", "date": "2026-06-04", "title": "Senior Learning Experience Des", "month": "Jun 2026"}, {"type": "hire", "name": "Paul W Croswell", "department": "6000 - Enrollment", "date": "2026-07-06", "title": "Admissions Lead", "month": "Jul 2026"}, {"type": "termination", "name": "Jill Musguire", "department": "1000 - Growth", "date": "2026-07-08", "title": "Growth", "month": "Jul 2026"}], "depts": ["1000 - Growth", "2000 - Operations", "2100 - Legal", "2200 - People Operations", "3000 - Learning Design", "4000 - Business Development", "5000 - Corporate", "6000 - Enrollment", "7000 - University Partnerships", "8000 - Learning Live", "9000 - Technology", "Product", "Unassigned"], "generated": "2026-07-13"}</script>
+<script>
+if (typeof Chart !== 'undefined') {
+  Chart.defaults.font.family = "'IBM Plex Sans', -apple-system, sans-serif";
+  Chart.defaults.color = '#241451';
+}
+const DATA = JSON.parse(document.getElementById('dashboard-data').textContent);
+const DEPT_LABEL = d => d.includes(' - ') ? d.split(' - ').slice(1).join(' - ') : d;
+// Brand palette: main brand ink (#241451), brand highlight (#dfe140), plus supporting hues for
+// multi-department charts, built to stay legible alongside the two brand colors.
+const BRAND = '#241451';
+const HIGHLIGHT = '#dfe140';
+const PALETTE = ['#241451','#dfe140','#6a5aad','#8f9a2e','#a89bd6','#4a3a7a','#c4c95f','#3a2472','#b7b7b7','#8676c2','#5b5480','#9d9d3f','#c1443a'];
+const deptColor = {};
+DATA.depts.forEach((d,i)=> deptColor[d] = PALETTE[i % PALETTE.length]);
+
+let currentDept = 'ALL';
+
+// populate department filter
+const sel = document.getElementById('deptFilter');
+sel.innerHTML = '<option value="ALL">All Departments</option>' + DATA.depts.map(d=>`<option value="${d}">${DEPT_LABEL(d)}</option>`).join('');
+sel.addEventListener('change', e => { currentDept = e.target.value; renderAll(); });
+
+// date range search
+const allMonthKeys = DATA.monthly.map(m=>m.month_key).sort();
+const FULL_MIN = allMonthKeys[0] + '-01';
+const FULL_MAX = '2026-07-13';
+const dateFromEl = document.getElementById('dateFrom');
+const dateToEl = document.getElementById('dateTo');
+dateFromEl.min = FULL_MIN; dateFromEl.max = FULL_MAX;
+dateToEl.min = FULL_MIN; dateToEl.max = FULL_MAX;
+dateFromEl.value = FULL_MIN;
+dateToEl.value = FULL_MAX;
+dateFromEl.addEventListener('change', renderAll);
+dateToEl.addEventListener('change', renderAll);
+document.getElementById('resetRange').addEventListener('click', ()=>{
+  dateFromEl.value = FULL_MIN; dateToEl.value = FULL_MAX; renderAll();
+});
+
+function getRange(){
+  let from = dateFromEl.value || FULL_MIN;
+  let to = dateToEl.value || FULL_MAX;
+  if (from > to) { [from, to] = [to, from]; }
+  return { from, to };
+}
+function isFullRange(range){
+  return range.from === FULL_MIN && range.to === FULL_MAX;
+}
+function monthsInRange(range){
+  // a month is included if it overlaps [from, to]
+  return DATA.monthly.filter(m => {
+    const monthStart = m.month_key + '-01';
+    return monthStart <= range.to && (m.month_key >= range.from.slice(0,7));
+  });
+}
+
+document.getElementById('asOf').textContent = `Data through July 13, 2026 · ${DATA.roster.length} active employees today · ${DATA.monthly.length} months of history (Jan 2024 – Jul 2026)`;
+
+function fmtDate(iso){
+  if(!iso) return '—';
+  const [y,m,d] = iso.split('-');
+  const months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${months[parseInt(m,10)-1]} ${parseInt(d,10)}, ${y}`;
+}
+function fmtRangeLabel(range){
+  return `${fmtDate(range.from)} – ${fmtDate(range.to)}`;
+}
+
+function computeKPIs(){
+  const m = DATA.monthly;
+  const last = m[m.length-1];
+  const current = currentDept==='ALL' ? last.month_end_headcount : last.dept_counts[currentDept];
+  const jan2024 = m[0];
+  const startVal = currentDept==='ALL' ? jan2024.month_end_headcount : jan2024.dept_counts[currentDept];
+  const dec2025 = m.find(x=>x.month_key==='2025-12');
+  const startOfYear = currentDept==='ALL' ? dec2025.month_end_headcount : dec2025.dept_counts[currentDept];
+  const ytd = m.filter(x=>x.month_key.startsWith('2026'));
+  let ytdHires, ytdTerms;
+  if(currentDept==='ALL'){
+    ytdHires = ytd.reduce((s,x)=>s+x.new_hires,0);
+    ytdTerms = ytd.reduce((s,x)=>s+x.terminations,0);
+  } else {
+    ytdHires = DATA.events.filter(e=>e.type==='hire' && e.department===currentDept && e.date && e.date.startsWith('2026')).length;
+    ytdTerms = DATA.events.filter(e=>e.type==='termination' && e.department===currentDept && e.date && e.date.startsWith('2026')).length;
+  }
+  const netYTD = current - startOfYear;
+  // trailing 12mo attrition: terms in last 12 months / avg headcount over that window
+  const last12 = m.slice(-12);
+  const termsTrailing = currentDept==='ALL' ? last12.reduce((s,x)=>s+x.terminations,0)
+    : DATA.events.filter(e=>e.type==='termination' && e.department===currentDept && last12.some(mm=>mm.month_key===e.date?.slice(0,7))).length;
+  const avgHC = last12.reduce((s,x)=> s + (currentDept==='ALL'?x.month_end_headcount:x.dept_counts[currentDept]), 0) / last12.length;
+  const attrition = avgHC>0 ? (termsTrailing/avgHC*100) : 0;
+
+  return {current, netYTD, ytdHires, ytdTerms, attrition, startOfYear};
+}
+
+function kpiCard(label, value, sub, subClass){
+  return `<div class="kpi"><div class="label">${label}</div><div class="value">${value}</div><div class="sub ${subClass||'neutral'}">${sub||''}</div></div>`;
+}
+
+function renderKPIs(){
+  const k = computeKPIs();
+  const netClass = k.netYTD > 0 ? 'pos' : (k.netYTD < 0 ? 'neg' : 'neutral');
+  const netSign = k.netYTD > 0 ? '+' : '';
+  const html = [
+    kpiCard('Current Headcount', k.current, currentDept==='ALL' ? 'as of Jul 13, 2026' : DEPT_LABEL(currentDept)),
+    kpiCard('Net Change, 2026 YTD', `${netSign}${k.netYTD}`, `from ${k.startOfYear} at start of year`, netClass),
+    kpiCard('Hires, 2026 YTD', k.ytdHires, 'Jan – Jul 2026', 'pos'),
+    kpiCard('Terminations, 2026 YTD', k.ytdTerms, 'Jan – Jul 2026', k.ytdTerms>0?'neg':'neutral'),
+    kpiCard('Trailing 12-Mo Attrition', k.attrition.toFixed(1)+'%', 'terms ÷ avg headcount'),
+  ].join('');
+  document.getElementById('kpiRow').innerHTML = html;
+}
+
+let trendChart, mixChart, hireTermChart, stackChart;
+
+function renderTrend(){
+  const range = getRange();
+  const months = monthsInRange(range);
+  const labels = months.map(m=>m.month);
+  const meh = months.map(m=> currentDept==='ALL' ? m.month_end_headcount : m.dept_counts[currentDept]);
+  const adm = months.map(m=> currentDept==='ALL' ? m.active_during_month : null);
+  const ctx = document.getElementById('trendChart');
+  if(trendChart) trendChart.destroy();
+  const datasets = [{
+      label: 'Month-End Headcount', data: meh, borderColor: BRAND, backgroundColor:'rgba(36,20,81,0.10)',
+      fill:true, tension:0.25, pointRadius:2, borderWidth:2.5
+  }];
+  if(currentDept==='ALL'){
+    datasets.push({label:'Active During Month', data: adm, borderColor:'#8f9a2e', backgroundColor:HIGHLIGHT, borderDash:[5,4], pointRadius:0, borderWidth:1.5, fill:false, tension:0.25});
+  }
+  trendChart = new Chart(ctx, {
+    type:'line',
+    data:{ labels, datasets },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      interaction:{ mode:'index', intersect:false },
+      scales:{ y:{ beginAtZero:true, ticks:{precision:0} }, x:{ ticks:{ maxRotation:60, minRotation:60, autoSkip:true, maxTicksLimit:16 } } },
+      plugins:{ legend:{ position:'bottom' } }
+    }
+  });
+  document.getElementById('trendDesc').textContent = isFullRange(range)
+    ? 'Month-end headcount and active-during-month, Jan 2024 – Jul 2026 (Jul partial, through 7/13)'
+    : `Month-end headcount and active-during-month, ${fmtRangeLabel(range)}`;
+}
+
+function renderMix(){
+  const last = DATA.monthly[DATA.monthly.length-1];
+  const entries = Object.entries(last.dept_counts).filter(([k,v])=>v>0);
+  const ctx = document.getElementById('mixChart');
+  if(mixChart) mixChart.destroy();
+  mixChart = new Chart(ctx, {
+    type:'doughnut',
+    data:{
+      labels: entries.map(([k])=>DEPT_LABEL(k)),
+      datasets:[{ data: entries.map(([,v])=>v), backgroundColor: entries.map(([k])=>deptColor[k]), borderWidth:2, borderColor:'#fff' }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ position:'right', labels:{ boxWidth:12, font:{size:11, family: "'IBM Plex Sans'" } } } },
+      onClick: (evt, els) => {
+        if(els.length){ const idx = els[0].index; const key = entries[idx][0]; sel.value = key; currentDept = key; renderAll(); }
+      }
+    }
+  });
+}
+
+function renderHireTerm(){
+  const range = getRange();
+  const months = monthsInRange(range);
+  const labels = months.map(m=>m.month);
+  let hires, terms;
+  if(currentDept==='ALL'){
+    hires = months.map(m=>m.new_hires);
+    terms = months.map(m=>m.terminations);
+  } else {
+    hires = months.map(m => DATA.events.filter(e=>e.type==='hire' && e.department===currentDept && e.month===m.month).length);
+    terms = months.map(m => DATA.events.filter(e=>e.type==='termination' && e.department===currentDept && e.month===m.month).length);
+  }
+  const ctx = document.getElementById('hireTermChart');
+  if(hireTermChart) hireTermChart.destroy();
+  hireTermChart = new Chart(ctx, {
+    type:'bar',
+    data:{ labels, datasets:[
+      {label:'New Hires', data:hires, backgroundColor:HIGHLIGHT},
+      {label:'Terminations', data:terms, backgroundColor:'#c1443a'}
+    ]},
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      scales:{ x:{ stacked:false, ticks:{ maxRotation:60, minRotation:60, autoSkip:true, maxTicksLimit:16 } }, y:{ beginAtZero:true, ticks:{precision:0} } },
+      plugins:{ legend:{ position:'bottom' } }
+    }
+  });
+  document.getElementById('hireTermDesc').textContent = isFullRange(range) ? 'By month' : `By month, ${fmtRangeLabel(range)}`;
+}
+
+function renderStack(){
+  const range = getRange();
+  const usingDefault = isFullRange(range);
+  const months = usingDefault ? DATA.monthly.slice(-12) : monthsInRange(range);
+  const labels = months.map(m=>m.month);
+  const depts = currentDept==='ALL' ? DATA.depts.filter(d => months.some(m=>m.dept_counts[d]>0)) : [currentDept];
+  const datasets = depts.map(d => ({
+    label: DEPT_LABEL(d),
+    data: months.map(m=>m.dept_counts[d]),
+    backgroundColor: deptColor[d],
+    stack: 'a'
+  }));
+  const ctx = document.getElementById('stackChart');
+  if(stackChart) stackChart.destroy();
+  stackChart = new Chart(ctx, {
+    type:'bar',
+    data:{ labels, datasets },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      scales:{ x:{ stacked:true }, y:{ stacked:true, beginAtZero:true, ticks:{precision:0} } },
+      plugins:{ legend:{ position:'bottom', labels:{ boxWidth:12, font:{size:10, family:"'IBM Plex Sans'"} } } }
+    }
+  });
+  document.getElementById('stackDesc').textContent = usingDefault
+    ? 'Last 12 months, month-end headcount'
+    : `${fmtRangeLabel(range)}, month-end headcount`;
+}
+
+function renderEvents(){
+  const range = getRange();
+  const usingDefault = isFullRange(range);
+  let windowFrom = range.from, windowTo = range.to;
+  if (usingDefault){
+    const cutoff = new Date('2026-07-13'); cutoff.setDate(cutoff.getDate()-90);
+    windowFrom = cutoff.toISOString().slice(0,10);
+    windowTo = FULL_MAX;
+  }
+  const rows = DATA.events.filter(e=>{
+    if(!e.date) return false;
+    if(currentDept!=='ALL' && e.department!==currentDept) return false;
+    return e.date >= windowFrom && e.date <= windowTo;
+  }).sort((a,b)=> b.date.localeCompare(a.date));
+  const tbody = document.querySelector('#eventsTable tbody');
+  tbody.innerHTML = rows.map(e=>`<tr>
+      <td>${fmtDate(e.date)}</td>
+      <td><span class="badge ${e.type}">${e.type==='hire'?'Hire':'Term'}</span></td>
+      <td>${e.name}</td>
+      <td>${e.title||''}</td>
+      <td>${DEPT_LABEL(e.department)}</td>
+    </tr>`).join('') || '<tr><td colspan="5" style="color:#635f78;">No activity in this window.</td></tr>';
+  document.getElementById('eventsDesc').textContent = usingDefault
+    ? `Hires and terminations, last 90 days (through Jul 13, 2026)`
+    : `Hires and terminations, ${fmtDate(windowFrom)} – ${fmtDate(windowTo)}`;
+}
+
+let rosterSort = {key:'department', dir:1};
+function renderRoster(){
+  let rows = DATA.roster.filter(r => currentDept==='ALL' || r.department===currentDept);
+  const q = document.getElementById('rosterSearch').value.trim().toLowerCase();
+  if(q) rows = rows.filter(r => r.name.toLowerCase().includes(q) || (r.title||'').toLowerCase().includes(q));
+  rows = rows.slice().sort((a,b)=>{
+    const av=a[rosterSort.key], bv=b[rosterSort.key];
+    if(typeof av==='number') return (av-bv)*rosterSort.dir;
+    return String(av).localeCompare(String(bv))*rosterSort.dir;
+  });
+  document.getElementById('rosterDesc').textContent = `${rows.length} of ${DATA.roster.length} active employees shown`;
+  const tbody = document.querySelector('#rosterTable tbody');
+  tbody.innerHTML = rows.map(r=>`<tr>
+      <td>${r.name}</td><td>${r.title||''}</td><td>${DEPT_LABEL(r.department)}</td>
+      <td>${r.location||''}</td><td>${fmtDate(r.start_date)}</td><td>${r.tenure_years}</td>
+    </tr>`).join('');
+}
+
+document.querySelectorAll('#rosterTable th').forEach(th=>{
+  th.addEventListener('click', ()=>{
+    const key = th.dataset.key;
+    if(rosterSort.key===key) rosterSort.dir *= -1; else { rosterSort.key=key; rosterSort.dir=1; }
+    renderRoster();
+  });
+});
+document.getElementById('rosterSearch').addEventListener('input', renderRoster);
+
+function renderAll(){
+  renderKPIs();
+  renderTrend();
+  renderMix();
+  renderHireTerm();
+  renderStack();
+  renderEvents();
+  renderRoster();
+}
+renderAll();
+</script>
+</body>
+</html>
